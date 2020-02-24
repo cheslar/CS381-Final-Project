@@ -1,4 +1,4 @@
-Members:
+Members
   Ryan Chesla (cheslar)
   Mateo 
   other person
