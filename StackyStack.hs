@@ -1,3 +1,7 @@
+-- | Team members:
+-- | Benjamin Geyer (geyerb)
+-- | Mateo Rey-Rosa (reyrosam)
+-- | Ryan Chesla (cheslar)
 module StackyStack where
 
 import Prelude hiding (Num, not, and, or, reverse, drop)
@@ -409,7 +413,70 @@ stdlib :: Prog
 stdlib = [include arraylib, include tuplelib]
 
 
--- | Example programs
+-- | Example programs:
+
+-- | Generate array with the first 20 fibonacci numbers:
+
+-- | With recursion
+fiboRecursive = [Declare "fibo" [
+                  dup, newInt 3, gt,
+                  IfElse [
+                    drop, drop,
+                    newStack,
+                    newInt 1, insert,
+                    newInt 1, insert
+                  ] [
+                    drop,
+                    subone,
+                    Call "fibo",
+                    RunInside [
+                      dup2, add
+                    ]
+                  ]
+                ],
+                newInt 20,
+                Call "fibo"]
+
+-- | With while loop
+fiboWhile = [include stdlib,
+            newInt 20, dup,
+            Call "newArray",
+            newInt 1, newInt 0, Call "set",
+            Call "shiftl",
+            newInt 1, newInt 0, Call "set",
+            Call "shiftl",
+            swap, subone, subone,
+            While [
+              swap, over, Call "get",
+              swap, over2, addone, Call "get",
+              swap, swap2, add,
+              over2, subone, Call "set",
+              swap, subone
+            ],
+            drop]
+
+-- | With for loop
+fiboFor = [newInt 20,
+          newStack,
+          RunInside [
+            newInt 1, newInt 1
+          ],
+          swap, subone, subone,
+          for [
+            swap,
+            RunInside [
+              dup2, add
+            ],
+            swap
+          ]]
+
+
+----------------------------------------------------------------------------------------
+-- | The below examples include good and bad examples of programs. These programs are
+-- | simpler and less practical, but show a more complete view of the features and
+-- | potential errors.
+----------------------------------------------------------------------------------------
+
 -- | Basic syntax, logic, and arithmetic
 -- | Good examples:
 
