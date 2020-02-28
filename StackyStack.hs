@@ -415,7 +415,7 @@ stdlib = [include arraylib, include tuplelib]
 
 -- | Example programs:
 
--- | Generate array with the first 20 fibonacci numbers:
+-- | Generate array with the first n fibonacci numbers:
 
 -- | With recursion
 fiboRecursive = [Declare "fibo" [
@@ -433,41 +433,42 @@ fiboRecursive = [Declare "fibo" [
                       dup2, add
                     ]
                   ]
-                ],
-                newInt 20,
-                Call "fibo"]
+                ]]
 
 -- | With while loop
 fiboWhile = [include stdlib,
-            newInt 20, dup,
-            Call "newArray",
-            newInt 1, Call "setfirst",
-            Call "shiftl",
-            newInt 1, Call "setfirst",
-            Call "shiftl",
-            swap, subone, subone,
-            While [
-              swap, over, Call "get",
-              swap, over2, addone, Call "get",
-              swap, swap2, add,
-              over2, subone, Call "set",
-              swap, subone
-            ],
-            drop]
+            Declare "fibo" [
+              newInt 20, dup,
+              Call "newArray",
+              newInt 1, Call "setfirst",
+              Call "shiftl",
+              newInt 1, Call "setfirst",
+              Call "shiftl",
+              swap, subone, subone,
+              While [
+                swap, over, Call "get",
+                swap, over2, addone, Call "get",
+                swap, swap2, add,
+                over2, subone, Call "set",
+                swap, subone
+              ],
+              drop
+            ]]
 
 -- | With for loop
-fiboFor = [newInt 20,
-          newStack,
-          RunInside [
-            newInt 1, newInt 1
-          ],
-          swap, subone, subone,
-          for [
-            swap,
+fiboFor = [Declare "fibo" [
+            newStack,
             RunInside [
-              dup2, add
+              newInt 1, newInt 1
             ],
-            swap
+            swap, subone, subone,
+            for [
+              swap,
+              RunInside [
+                dup2, add
+              ],
+              swap
+            ]
           ]]
 
 
