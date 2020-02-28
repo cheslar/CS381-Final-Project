@@ -441,9 +441,9 @@ fiboRecursive = [Declare "fibo" [
 fiboWhile = [include stdlib,
             newInt 20, dup,
             Call "newArray",
-            newInt 1, newInt 0, Call "set",
+            newInt 1, Call "setfirst",
             Call "shiftl",
-            newInt 1, newInt 0, Call "set",
+            newInt 1, Call "setfirst",
             Call "shiftl",
             swap, subone, subone,
             While [
