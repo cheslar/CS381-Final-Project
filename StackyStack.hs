@@ -5,6 +5,7 @@
 module StackyStack where
 
 import Prelude hiding (Num, not, and, or, reverse, drop, div, round, mod)
+import Data.Char
 
 -- | Abstract syntax
 type Prog = [Cmd]
@@ -117,6 +118,14 @@ run p = case prog p ([], emptyEnv) of
           _ -> Nothing
 
 
+-- | String helper method -- build string from human readable characters rather than numbers
+-- | (technically this is at the language core as it adds the ability to convert from chars to
+-- | numbers, however its primary purpose is really just to make testing easier)
+stringBuilder :: String -> Prog
+stringBuilder [] = [newStack]
+stringBuilder (x:s) = (stringBuilder s) ++ [newNum (fromIntegral (ord x)), insert]
+
+
 -- | Syntactic sugar
 -- | Boolean values
 true :: Expr
@@ -131,9 +140,12 @@ newTrue = Push true
 newFalse :: Cmd
 newFalse = Push false
 
--- | Integers and functions
+-- | Integers, strings and functions
 newNum :: Float -> Cmd
 newNum = Push . Num
+
+newString :: String -> Cmd
+newString = block . stringBuilder
 
 newFunc :: Function -> Cmd
 newFunc = Push . Func
