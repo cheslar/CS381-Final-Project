@@ -4,19 +4,20 @@
 -- | Ryan Chesla (cheslar)
 module StackyStack where
 
-import Prelude hiding (Num, not, and, or, reverse, drop)
+import Prelude hiding (Num, not, and, or, reverse, drop, div, round, mod)
 
 -- | Abstract syntax
 type Prog = [Cmd]
 type Function = String
 
-data Expr = Num Int
+data Expr = Num Float
           | Func Function
           | Stack
           | Insert
           | Extract
           | Add
           | Mul
+          | Pow
           | Equ
           | Lt
           | Swap
@@ -36,7 +37,7 @@ data Cmd = Push Expr
 
 
 -- | Semantic domain
-data StackItem = Primitive Int
+data StackItem = Primitive Float
                | Object Stack
                | FunctionName Function
                deriving(Eq, Show)
@@ -66,6 +67,8 @@ expr (Add) (Primitive x : Primitive y : s) = Just (Primitive (x + y) : s)
 expr (Add) _ = Nothing
 expr (Mul) (Primitive x : Primitive y : s) = Just (Primitive (x * y) : s)
 expr (Mul) _ = Nothing
+expr (Pow) (Primitive x : Primitive y : s) = Just (Primitive (y ** x) : s)
+expr (Pow) _ = Nothing
 expr (Equ) (x : y : s) = Just (Primitive (if x == y then 1 else 0) : s)
 expr (Equ) _ = Nothing
 expr (Lt) (Primitive x : Primitive y : s) = Just (Primitive (if x < y then 1 else 0) : s)
@@ -129,8 +132,8 @@ newFalse :: Cmd
 newFalse = Push false
 
 -- | Integers and functions
-newInt :: Int -> Cmd
-newInt = Push . Num
+newNum :: Float -> Cmd
+newNum = Push . Num
 
 newFunc :: Function -> Cmd
 newFunc = Push . Func
@@ -184,7 +187,7 @@ dup2 :: Cmd
 dup2 = block [over, over]
 
 over2 :: Cmd
-over2 = block [newInt 2, overn]
+over2 = block [newNum 2, overn]
 
 drop2 :: Cmd
 drop2 = block [drop, drop]
@@ -208,19 +211,78 @@ add :: Cmd
 add = Push Add
 
 addone :: Cmd
-addone = block [newInt 1, add]
+addone = block [newNum 1, add]
 
 subone :: Cmd
-subone = block [newInt 1, sub]
+subone = block [newNum 1, sub]
 
 mul :: Cmd
 mul = Push Mul
 
+pow :: Cmd
+pow = Push Pow
+
 neg :: Cmd
-neg = block [newInt (-1), mul]
+neg = block [newNum (-1), mul]
+
+roundpos :: Cmd
+roundpos = block [newNum 0, swap,
+                  While [
+                    dup, newNum 0.5, gt,
+                    IfElse [
+                      drop, newFalse
+                    ] [
+                      drop, subone, swap, addone, swap
+                    ]
+                  ],
+                  drop2]
+
+round :: Cmd
+round = block [dup, newNum 0, gt,
+              IfElse [
+                drop, neg, roundpos, neg
+              ] [
+                drop, roundpos
+              ]]
 
 sub :: Cmd
 sub = block [neg, add]
+
+div :: Cmd
+div = block [newNum 1, neg, pow, mul]
+
+divint :: Cmd
+divint = block [div, round]
+
+modpos :: Cmd
+modpos = block [While [
+                 dup2, lte,
+                 IfElse [
+                   drop, swap, over, sub, swap
+                 ] []
+               ],
+               drop2]
+
+mod :: Cmd
+mod = block [dup, newNum 0, lt,
+            IfElse [
+              drop, over, newNum 0, lt,
+              IfElse [
+                drop, modpos
+              ] [
+                drop, dup, swap2, neg, swap,
+                modpos, sub
+              ]
+            ] [
+              drop, over, newNum 0, lt,
+              IfElse [
+                drop, neg, dup, swap2, swap,
+                modpos, sub, neg
+              ] [
+                drop, swap, neg, swap, neg,
+                modpos, neg
+              ]
+            ]]
 
 not :: Cmd
 not = block [newFalse, equ]
@@ -303,7 +365,7 @@ newArray :: Cmd
 newArray = Declare "newArray" [
              Call "range",
              foreach [
-               drop, newInt 0
+               drop, newNum 0
               ]
             ]
 
@@ -335,9 +397,9 @@ cat = Declare "cat" [
 
 len :: Cmd
 len = Declare "len" [
-        dup, newInt 0, swap,
+        dup, newNum 0, swap,
         foreach [
-          drop, swap, addone, swap, newInt 0
+          drop, swap, addone, swap, newNum 0
         ],
         drop
       ]
@@ -381,27 +443,27 @@ arraylib = [newArray, get, set, cat, len, range, shiftl, shiftr, shiftnl, shiftn
 -- | Tuple operations
 newTuple :: Cmd
 newTuple = Declare "newTuple" [
-             newInt 2, Call "newArray"
+             newNum 2, Call "newArray"
            ]
 
 getfirst :: Cmd
 getfirst = Declare "getfirst" [
-             newInt 0, Call "get"
+             newNum 0, Call "get"
           ]
 
 getsecond :: Cmd
 getsecond = Declare "getsecond" [
-              newInt 1, Call "get"
+              newNum 1, Call "get"
             ]
 
 setfirst :: Cmd
 setfirst = Declare "setfirst" [
-             newInt 0, Call "set"
+             newNum 0, Call "set"
            ]
 
 setsecond :: Cmd
 setsecond = Declare "setsecond" [
-              newInt 1, Call "set"
+              newNum 1, Call "set"
             ]
 
 tuplelib :: Prog
@@ -419,12 +481,12 @@ stdlib = [include arraylib, include tuplelib]
 
 -- | With recursion
 fiboRecursive = [Declare "fibo" [
-                  dup, newInt 3, gt,
+                  dup, newNum 3, gt,
                   IfElse [
                     drop, drop,
                     newStack,
-                    newInt 1, insert,
-                    newInt 1, insert
+                    newNum 1, insert,
+                    newNum 1, insert
                   ] [
                     drop,
                     subone,
@@ -438,11 +500,11 @@ fiboRecursive = [Declare "fibo" [
 -- | With while loop
 fiboWhile = [include stdlib,
             Declare "fibo" [
-              newInt 20, dup,
+              newNum 20, dup,
               Call "newArray",
-              newInt 1, Call "setfirst",
+              newNum 1, Call "setfirst",
               Call "shiftl",
-              newInt 1, Call "setfirst",
+              newNum 1, Call "setfirst",
               Call "shiftl",
               swap, subone, subone,
               While [
@@ -459,7 +521,7 @@ fiboWhile = [include stdlib,
 fiboFor = [Declare "fibo" [
             newStack,
             RunInside [
-              newInt 1, newInt 1
+              newNum 1, newNum 1
             ],
             swap, subone, subone,
             for [
@@ -482,71 +544,71 @@ fiboFor = [Declare "fibo" [
 -- | Good examples:
 
 -- | Perform 5 + 5
-syntaxGoodEx1 = [newInt 5, dup, add]
+syntaxGoodEx1 = [newNum 5, dup, add]
 
 -- | Perform (3 * (4 + 5))
-syntaxGoodEx2 = [newInt 3, newInt 4, newInt 5, add, mul]
+syntaxGoodEx2 = [newNum 3, newNum 4, newNum 5, add, mul]
 
 -- | Perform true or false
 syntaxGoodEx3 = [newTrue, newFalse, or]
 
 -- | Perform (not 0) and true
 -- | (booleans are really integers so they can be used interchangeably)
-syntaxGoodEx4 = [newInt 0, not, newTrue, and]
+syntaxGoodEx4 = [newNum 0, not, newTrue, and]
 
 -- | Bad examples:
 -- | Performing operation on empty stack
 syntaxBadEx1 = [neg]
 
 -- | Some operations need two arguments
-syntaxBadEx2 = [newInt 1, add]
+syntaxBadEx2 = [newNum 1, add]
 
 
 -- | Basic stack operations
 -- | Good examples:
 
 -- | Duplicate second item, add new item, duplicate new item
-stackGoodEx1 = [newInt 1, newInt 2, over, newInt 3, dup]
+stackGoodEx1 = [newNum 1, newNum 2, over, newNum 3, dup]
 
 -- | Duplicate last two items, duplicate third item, get rid of last item
-stackGoodEx2 = [newInt 1, newInt 2, dup2, over2, drop]
+stackGoodEx2 = [newNum 1, newNum 2, dup2, over2, drop]
 
 -- | Create stack inside stack, then add integer to it -- two ways
 stackGoodEx3 = [newStack,
                 RunInside [
-                  newInt 1
+                  newNum 1
                 ]]
-stackGoodEx4 = [newStack, newInt 1, insert]
+stackGoodEx4 = [newStack, newNum 1, insert]
 
 -- | Remove integer from stack
-stackGoodEx5 = [newStack, newInt 1, insert, extract]
+stackGoodEx5 = [newStack, newNum 1, insert, extract]
 
 -- | Bad examples:
 -- | Trying to insert with stack in front
-stackBadEx1 = [newInt 1, newStack, insert]
+stackBadEx1 = [newNum 1, newStack, insert]
 
 -- | Using operations without enough arguments
 stackBadEx2 = [dup]
-stackBadEx3 = [newInt 1, over]
+stackBadEx3 = [newNum 1, over]
 
 
 -- | Conditionals
 -- | Good examples:
 
 -- | If 5 < 3 then push 1 to the stack else push 0
-condGoodEx1 = [newInt 3, newInt 5, lt, IfElse [drop, newInt 1] [drop, newInt 0]]
+condGoodEx1 = [newNum 3, newNum 5, lt, IfElse [drop, newNum 1] [drop, newNum 0]]
 
 -- | If stack within stack is empty then insert 1 to it
 condGoodEx2 = [newStack,
               IfElse [
               ] [
-                newInt 1, insert
+                newNum 1, insert
               ]]
 
 -- | If stack is empty perform default behavior in else block -- add 1 to stack
 condGoodEx3 = [IfElse [
               ] [
-                newInt 1
+                newNum 1
               ]]
 
 -- | Bad examples:
@@ -554,9 +616,9 @@ condGoodEx3 = [IfElse [
 -- | Calling IfElse on a function variable
 condBadEx1 = [newFunc "foo",
              IfElse [
-               newInt 0
+               newNum 0
              ] [
-               newInt 1
+               newNum 1
              ]]
 
 
@@ -570,25 +632,25 @@ funcGoodEx1 = [Declare "foo" [
 
 -- | Call "foo" function on number 5
 funcGoodEx2 = [include funcGoodEx1,
-              newInt 5, Call "foo"]
+              newNum 5, Call "foo"]
 
 -- | First order functions -- store function as variable and call it
 funcGoodEx3 = [include funcGoodEx1,
-              newInt 5, newFunc "foo", Exec]
+              newNum 5, newFunc "foo", Exec]
 
 -- | First order functions -- use function as argument
 funcGoodEx4 = [include funcGoodEx1,
               Declare "bar" [
                 Exec, subone
               ],
-              newInt 5, newFunc "foo", Call "bar"]
+              newNum 5, newFunc "foo", Call "bar"]
 
 -- | Bad examples:
 -- | Calling a function that doesn't exist (or using Exec on one)
 funcBadEx1 = [Call "baz"]
 
 -- | Using Exec on something that is not a function
-funcBadEx2 = [newInt 1, Exec]
+funcBadEx2 = [newNum 1, Exec]
 
 
 -- | Recursion and loops
@@ -596,30 +658,30 @@ funcBadEx2 = [newInt 1, Exec]
 
 -- | Recursively count down from five
 loopGoodEx1 = [Declare "foo" [
-                dup, newInt 0, lt,
+                dup, newNum 0, lt,
                 IfElse [
                   drop, subone, Call "foo"
                 ] [
                   drop
                 ]
               ],
-              newInt 5, Call "foo"]
+              newNum 5, Call "foo"]
 
 -- | Count down from five in while loop
-loopGoodEx2 = [newInt 5,
+loopGoodEx2 = [newNum 5,
               While [
                 subone
               ]]
 
 -- | Make numbers one through five in for loop
-loopGoodEx3 = [newInt 5,
+loopGoodEx3 = [newNum 5,
               for [
                 dup, addone, swap
               ]]
 
 -- | Square each number in array with foreach
 loopGoodEx4 = [include stdlib,
-              newInt 5, Call "range",
+              newNum 5, Call "range",
               foreach [
                 dup, mul
               ]]
@@ -631,7 +693,7 @@ loopBadEx1 = [While []]
 loopBadEx2 = [for []]
 
 -- | For each on non-stack or other parameter type mismatch
-loopBadEx3 = [newInt 3,
+loopBadEx3 = [newNum 3,
              foreach []]
 
 -- | Infinite while loop due to never making top item on stack false
@@ -639,7 +701,7 @@ loopBadEx4 = [newTrue,
              While []]
 
 -- | Infinite for loop if value chosen is less than 0
-loopBadEx5 = [newInt 1, neg,
+loopBadEx5 = [newNum 1, neg,
              for []]
 
 
@@ -648,67 +710,67 @@ loopBadEx5 = [newInt 1, neg,
 
 -- | Create new array of size 10
 arrayGoodEx1 = [include stdlib,
-               newInt 10, Call "newArray"]
+               newNum 10, Call "newArray"]
 
 -- | Make array of numbers 0-9
 arrayGoodEx2 = [include stdlib,
-               newInt 10, Call "range"]
+               newNum 10, Call "range"]
 
 -- | Access 3rd element of array
 arrayGoodEx3 = [include stdlib,
-               newInt 10, Call "range",
-               newInt 2, Call "get"]
+               newNum 10, Call "range",
+               newNum 2, Call "get"]
 
 -- | Set 4th element of array to 100
 arrayGoodEx4 = [include stdlib,
-               newInt 10, Call "newArray",
-               newInt 100, newInt 3, Call "set"]
+               newNum 10, Call "newArray",
+               newNum 100, newNum 3, Call "set"]
 
 -- | Make 10 * 10 2d array
 arrayGoodEx5 = [include stdlib,
-               newInt 10, Call "newArray",
+               newNum 10, Call "newArray",
                foreach [
-                 drop, newInt 10, Call "newArray"
+                 drop, newNum 10, Call "newArray"
                ]]
 
 -- | Concatenate two arrays
 arrayGoodEx6 = [include stdlib,
-               newInt 10, Call "newArray",
-               newInt 10, Call "range",
+               newNum 10, Call "newArray",
+               newNum 10, Call "range",
                Call "cat"]
 
 -- | Get length of array
 arrayGoodEx7 = [include stdlib,
-               newInt 10, Call "newArray",
+               newNum 10, Call "newArray",
                Call "len"]
 
 -- | Left shift array elements by 5, then shift right by 1
 arrayGoodEx8 = [include stdlib,
-               newInt 10, Call "range",
-               newInt 5, Call "shiftnl",
+               newNum 10, Call "range",
+               newNum 5, Call "shiftnl",
                Call "shiftr"]
 
 -- | Bad examples:
 
 -- | Trying to access an element outside of the array
 arrayBadEx1 = [include stdlib,
-              newInt 10, Call "range",
-              newInt 10, Call "get"]
+              newNum 10, Call "range",
+              newNum 10, Call "get"]
 
 -- | Trying to concatenate with a non array
 arrayBadEx2 = [include stdlib,
-              newInt 10, Call "range",
-              newInt 10,
+              newNum 10, Call "range",
+              newNum 10,
               Call "cat"]
 
 -- | Using newArray or range with a negative value (causes infinite loop due to for loop used)
 arrayBadEx3 = [include stdlib,
-              newInt (-1), Call "range"]
+              newNum (-1), Call "range"]
 
 -- | Too few arguments
 arrayBadEx4 = [include stdlib,
-              newInt 10, Call "range",
-              newInt 10, Call "set"]
+              newNum 10, Call "range",
+              newNum 10, Call "set"]
 
 
 -- | Tuples
@@ -721,7 +783,7 @@ tupleGoodEx1 = [include stdlib,
 -- | Set the first element of the tuple to be one
 tupleGoodEx2 = [include stdlib,
                Call "newTuple",
-               newInt 1, Call "setfirst"]
+               newNum 1, Call "setfirst"]
 
 -- | Set the second element of the tuple to be another tuple
 tupleGoodEx3 = [include stdlib,
@@ -731,14 +793,14 @@ tupleGoodEx3 = [include stdlib,
 -- | Get the first element of a tuple
 tupleGoodEx4 = [include stdlib,
                Call "newTuple",
-               newInt 1, Call "setfirst",
+               newNum 1, Call "setfirst",
                Call "getfirst"]
 
 -- | Bad examples:
 
 -- | Calling get/set on non tuple
 tupleBadEx1 = [include stdlib,
-              newInt 10,
+              newNum 10,
               Call "getfirst"]
 
 -- | Too few arguments
